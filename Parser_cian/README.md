@@ -42,9 +42,8 @@ fake-useragent>=1.5.1
 pip install -r requirements.txt
 ```
 
-#                                  Структура программы
 
-## 📦 Архитектура проекта `cian_parser/` 
+##                      📦 Архитектура проекта `cian_parser/` 
 
 | Модуль            | Класс / логика                | Ответственность                          |
 |------------------|-------------------------------|-------------------------------------------|
@@ -88,3 +87,124 @@ from cian_parser.parser import Parser
 parser = Parser()
 parser.run()
 ```
+
+
+## 🌐 Класс HtmlLoader
+
+Класс HtmlLoader отвечает за безопасную и гибкую загрузку HTML-кода веб-страницы по заданному URL.
+Он включает в себя поддержку антибана, работу с прокси, логирование и первичную проверку доступности ресурса.
+
+### 🔧 Основной функционал:
+	•	Выполняет HTTP-запрос с помощью requests
+	•	Подставляет случайный User-Agent (через fake-useragent)
+	•	Поддерживает подключение через прокси (http и https)
+	•	Делает случайную паузу (1.5–3.0 сек) после запроса для имитации поведения пользователя
+	•	Производит предварительную HEAD-проверку URL на доступность при инициализации
+	•	Логирует все события в файл loader.log (успешные и ошибочные запросы)
+
+📄 Пример логов (loader.log):
+```
+2025-04-17 12:42:01 [INFO] Success: https://www.cian.ru/...
+2025-04-17 12:43:05 [WARNING] Bad status 403 for https://www.cian.ru/...
+2025-04-17 12:44:21 [ERROR] Exception: HTTPSConnectionPool(...)
+```
+
+🔐 Прокси и URL можно задать через .env:
+```env
+CIAN_URL=https://www.cian.ru/...
+PROXY_HTTP=http://123.45.67.89:8080
+PROXY_HTTPS=http://123.45.67.89:8080
+```
+И использовать в settings.py:
+```python
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+BASE_URL = os.getenv("CIAN_URL")
+PROXIES = {
+    "http": os.getenv("PROXY_HTTP"),
+    "https": os.getenv("PROXY_HTTPS")
+}
+```
+
+## 🧩 Использует:
+	•	fake-useragent — генерация случайных User-Agent заголовков
+	•	requests — выполнение HTTP-запросов
+	•	logging — логирование действий в файл loader.log
+	•	dotenv — загрузка конфигурации из .env
+	•	random + time.sleep — реализация паузы для обхода антибот-систем
+
+class html_loader:
+```python
+class HtmlLoader:
+    def __init__(self, url, proxies=None):
+        self.url = url
+        self.ua = UserAgent()
+        self.headers = {
+            "User-Agent": self.ua.random
+        }
+        self.proxies = proxies
+
+        # Настраиваем логгер
+        logging.basicConfig(
+            filename="loader.log",
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s"
+        )
+
+        if not self._check_url():
+            print("⚠️ Предупреждение: URL может быть недоступен.")
+            logging.warning(f"URL may be unreachable: {self.url}")
+
+    def fetch(self):
+        print(f"🌐 Загружаем страницу: {self.url}")
+        try:
+            response = requests.get(
+                self.url,
+                headers=self.headers,
+                proxies=self.proxies,
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                print("✅ HTML получен успешно")
+                logging.info(f"Success: {self.url}")
+                self._anti_ban_sleep()
+                return response.text
+            else:
+                print(f"❌ Ошибка запроса: статус {response.status_code}")
+                logging.warning(f"Bad status {response.status_code} for {self.url}")
+        except Exception as e:
+            print(f"💥 Исключение при запросе: {e}")
+            logging.error(f"Exception: {e}")
+
+        return None
+
+    def _anti_ban_sleep(self):
+        delay = round(random.uniform(1.5, 3.0), 2)
+        print(f"😴 Пауза {delay} сек для антибана...")
+        time.sleep(delay)
+
+    def _check_url(self):
+        """Простая HEAD-проверка доступности URL"""
+        try:
+            response = requests.head(self.url, timeout=5)
+            return response.status_code < 400
+        except Exception:
+            return False
+```
+### ✅ Что внутри def fetch(self) `response` (объект `requests.get(...)`)
+
+| Атрибут / метод                        | Что даёт                                        | Пример                                           |
+|---------------------------------------|--------------------------------------------------|--------------------------------------------------|
+| `response.status_code`                | Код ответа сервера                               | `200`, `403`, `404`, `500`                       |
+| `response.text`                       | HTML содержимое страницы как строка              | `"<html>...</html>"`                             |
+| `response.content`                    | HTML как `bytes` (для изображений и файлов)      | `b"<html>...</html>"`                            |
+| `response.headers`                    | Заголовки ответа                                 | `{'Content-Type': 'text/html; charset=utf-8'}`   |
+| `response.url`                        | Итоговый URL (с учётом редиректов)              | `"https://www.cian.ru/cat.php?...`"             |
+| `response.ok`                         | `True`, если статус от 200 до 399                | `True` / `False`                                 |
+| `response.encoding`                   | Кодировка текста                                 | `"utf-8"`                                        |
+| `response.elapsed.total_seconds()`   | Время ответа от сервера                          | `0.42` (секунд)                                  |
+
