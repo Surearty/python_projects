@@ -1,4 +1,4 @@
-requests>=2.31.0
-beautifulsoup4>=4.12.3
-lxml>=4.9.3
-fake-useragent>=1.5.1
+playwright>=1.43.0        # Браузер с поддержкой JS
+beautifulsoup4>=4.12.3    # Для парсинга HTML
+lxml>=4.9.3               # Быстрый XML/HTML парсер (под капотом BS4)
+fake-useragent>=1.5.1     # Может пригодиться для кастомных UA (если Playwright будем настраивать)
